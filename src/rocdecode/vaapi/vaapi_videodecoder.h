@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <fcntl.h>
 #include <unistd.h>
 #include <cstring>
+#include <semaphore.h>
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
     #include <filesystem>
 #else
