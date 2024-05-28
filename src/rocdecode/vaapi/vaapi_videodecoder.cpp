@@ -444,13 +444,15 @@ void VaapiVideoDecoder::GetCurrentComputePartition(std::vector<ComputePartition>
     }
     // Wait for the semaphore
     sem_wait(sem);
+    std::error_code ec;
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(search_path, std::filesystem::directory_options::skip_permission_denied)) {
+    for (auto it = std::filesystem::recursive_directory_iterator(search_path, std::filesystem::directory_options::skip_permission_denied); it != std::filesystem::recursive_directory_iterator(); ) {
 #else
-    for (const auto& entry : std::experimental::filesystem::recursive_directory_iterator(search_path, std::experimental::filesystem::directory_options::skip_permission_denied)) {
+    for (auto it = std::experimental::filesystem::recursive_directory_iterator(search_path, std::experimental::filesystem::directory_options::skip_permission_denied); it != std::experimental::filesystem::recursive_directory_iterator(); ) {
 #endif
-        if (entry.path().filename() == partition_file) {
-            std::ifstream file(entry.path());
+        try {
+        if (it->path().filename() == partition_file) {
+            std::ifstream file(it->path());
             if (file.is_open()) {
                 std::string partition;
                 std::getline(file, partition);
@@ -467,6 +469,12 @@ void VaapiVideoDecoder::GetCurrentComputePartition(std::vector<ComputePartition>
                 }
                 file.close();
             }
+        }
+        ++it;
+        } catch (std::filesystem::filesystem_error& e) {
+            // Handle the error
+            //std::cerr << "Filesystem error: " << e.what() << '\n';
+            it.increment(ec); // Increment the iterator, ignoring any errors
         }
     }
     // Release and clode the semaphore
