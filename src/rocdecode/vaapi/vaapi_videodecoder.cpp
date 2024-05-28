@@ -436,14 +436,6 @@ void VaapiVideoDecoder::GetCurrentComputePartition(std::vector<ComputePartition>
     std::string search_path = "/sys/devices/";
     std::string partition_file = "current_compute_partition";
 
-    // Create a named semaphore
-    sem_t *sem = sem_open("/rocdecode_semaphore", O_CREAT, 0644, 1);
-    if (sem == SEM_FAILED) {
-        perror("sem_open");
-        exit(EXIT_FAILURE);
-    }
-    // Wait for the semaphore
-    sem_wait(sem);
     std::error_code ec;
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
     for (auto it = std::filesystem::recursive_directory_iterator(search_path, std::filesystem::directory_options::skip_permission_denied); it != std::filesystem::recursive_directory_iterator(); ) {
@@ -472,15 +464,9 @@ void VaapiVideoDecoder::GetCurrentComputePartition(std::vector<ComputePartition>
         }
         ++it;
         } catch (std::filesystem::filesystem_error& e) {
-            // Handle the error
-            //std::cerr << "Filesystem error: " << e.what() << '\n';
             it.increment(ec); // Increment the iterator, ignoring any errors
         }
     }
-    // Release and clode the semaphore
-    sem_post(sem);
-    sem_close(sem);
-    sem_unlink("/rocdecode_semaphore");
 }
 
 void VaapiVideoDecoder::GetDrmNodeOffset(std::string device_name, uint8_t device_id, std::vector<int>& visible_devices,
