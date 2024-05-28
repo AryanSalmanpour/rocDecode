@@ -445,9 +445,9 @@ void VaapiVideoDecoder::GetCurrentComputePartition(std::vector<ComputePartition>
     // Wait for the semaphore
     sem_wait(sem);
 #if __cplusplus >= 201703L && __has_include(<filesystem>)
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(search_path)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(search_path, std::filesystem::directory_options::skip_permission_denied)) {
 #else
-    for (const auto& entry : std::experimental::filesystem::recursive_directory_iterator(search_path)) {
+    for (const auto& entry : std::experimental::filesystem::recursive_directory_iterator(search_path, std::experimental::filesystem::directory_options::skip_permission_denied)) {
 #endif
         if (entry.path().filename() == partition_file) {
             std::ifstream file(entry.path());
