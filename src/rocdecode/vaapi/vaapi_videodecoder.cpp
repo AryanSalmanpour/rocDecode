@@ -559,7 +559,7 @@ rocDecStatus VaContext::GetVaContext(int device_id, uint32_t *va_ctx_id) {
 
         int offset = 0;
         ComputePartition current_compute_partition = (gpu_uuids_to_compute_partition_map_.find(gpu_uuid) != gpu_uuids_to_compute_partition_map_.end()) ? gpu_uuids_to_compute_partition_map_[gpu_uuid] : kSpx;
-        GetDrmNodeOffset(va_contexts_[va_ctx_idx].hip_dev_prop.name, va_contexts_[va_ctx_idx].device_id, visible_devices, current_compute_partition, offset);
+        GetDrmNodeOffset(va_contexts_[va_ctx_idx].hip_dev_prop.name, va_contexts_[va_ctx_idx].device_id, visible_devices, current_compute_partition, gpu_uuid, offset);
 
         std::string drm_node = "/dev/dri/renderD";
         int render_node_id = (gpu_uuids_to_render_nodes_map_.find(gpu_uuid) != gpu_uuids_to_render_nodes_map_.end()) ? gpu_uuids_to_render_nodes_map_[gpu_uuid] : 128;
@@ -837,7 +837,7 @@ void VaContext::GetVisibleDevices(std::vector<int>& visible_devices_vetor) {
     }
 }
 
-void VaContext::GetDrmNodeOffset(std::string device_name, uint8_t device_id, std::vector<int>& visible_devices, ComputePartition current_compute_partition, int &offset) {
+void VaContext::GetDrmNodeOffset(std::string device_name, uint8_t device_id, std::vector<int>& visible_devices, ComputePartition current_compute_partition, std::string gpu_uuid, int &offset) {
 
     switch (current_compute_partition) {
         case kSpx:
@@ -865,24 +865,18 @@ void VaContext::GetDrmNodeOffset(std::string device_name, uint8_t device_id, std
             }
             break;
         case kCpx:
-            // Note: The MI300 series share the same gfx_arch_name (gfx942).
-            // Therefore, we cannot use gfx942 to distinguish between MI300X, MI300A etc.
-            // Instead, use the device name to identify MI300A etc.
-            std::string mi300a = "MI300A";
-            size_t found_mi300a = device_name.find(mi300a);
-            if (found_mi300a != std::string::npos) {
+            uint32_t num_compute_instances = GetNumComputeInstances(gpu_uuid);
+            std::cout << "number_compute_instance: " << num_compute_instances << std::endl;
+            if (num_compute_instances != 0) {
                 if (device_id < visible_devices.size()) {
-                    offset = (visible_devices[device_id] % 6);
+                    offset = (visible_devices[device_id] % num_compute_instances);
                 } else {
-                    offset = (device_id % 6);
+                    offset = (device_id % num_compute_instances);
                 }
             } else {
-                if (device_id < visible_devices.size()) {
-                    offset = (visible_devices[device_id] % 8);
-                } else {
-                    offset = (device_id % 8);
-                }
+                offset = 0;
             }
+            std::cout << "offset: " << offset << std::endl;
             break;
     }
 }
@@ -955,4 +949,28 @@ void VaContext::GetGpuUuids() {
             }
         }
     }
+}
+
+uint32_t VaContext::GetNumComputeInstances(std::string gpu_uuid) {
+    std::string drm_node = "/dev/dri/renderD";
+    int render_node_id = (gpu_uuids_to_render_nodes_map_.find(gpu_uuid) != gpu_uuids_to_render_nodes_map_.end()) ? gpu_uuids_to_render_nodes_map_[gpu_uuid] : 128;
+    drm_node += std::to_string(render_node_id);
+    int drm_fd = open(drm_node.c_str(), O_RDWR);
+    if (drm_fd < 0) {
+        ERR("Failed to open drm node." + drm_node);
+        return 0;
+    }
+    amdgpu_device_handle dev_handle;
+    uint32_t major_version = 0, minor_version = 0;
+    if (amdgpu_device_initialize(drm_fd, &major_version, &minor_version, &dev_handle)) {
+        ERR("GPU device initialization failed: " + drm_node);
+        return 0;
+    }
+    uint32_t count = 0;
+    if (amdgpu_query_hw_ip_count(dev_handle, AMDGPU_HW_IP_COMPUTE, &count)) {
+        ERR("Failed to get the number of compute instances");
+    }
+    amdgpu_device_deinitialize(dev_handle);
+    close(drm_fd);
+    return count;
 }
